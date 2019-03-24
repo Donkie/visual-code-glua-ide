@@ -21,6 +21,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 						let data = parser.data;
 
+						console.log("File scope tree: ", parser.topScope);
+
 						console.log("Hooks:");
 						data.hooks.forEach(hook => {
 							let params = hook.parameters.join(', ');
@@ -48,7 +50,6 @@ export function activate(context: vscode.ExtensionContext) {
 						console.log("Member Variables:");
 						data.memberVariables.forEach(memb => {
 							let tbl = memb.table;
-
 							console.log(`line ${memb.v.line}: ${tbl}.${memb.v.name} (type '${LuaPrimitive[memb.v.type]}')`);
 						});
 						

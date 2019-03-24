@@ -1,17 +1,13 @@
 import * as luaparse from 'luaparse';
+import {LuaScope} from './LocalData';
 import {GlobalData, LuaPrimitive, LuaVariable, LuaFunction, LuaMemberFunction, LuaMemberVariable, LuaHook} from './GlobalData';
 
 class LuaParser {
 	readonly data: GlobalData = new GlobalData();
 
+	topScope?: LuaScope;
+
 	private fileId: string;
-
-	// Maps a local variable name to a metatable name, e.g. "plymeta => Player"
-	private metaTables: {[varName: string]: string} = {};
-
-	private static deepCopy(t: any){
-		return JSON.parse(JSON.stringify(t));
-	}
 
 	private static valueTypeFromType(type: string): LuaPrimitive{
 		switch(type){
@@ -28,27 +24,15 @@ class LuaParser {
 		}
 	}
 	
-	private isLocal(name: string, scope: any){
-		if(this.metaTables[name]){
-			return false;
-		}
-	
-		if(scope.locals[name]){
-			return true;
-		}
-	
-		return false;
-	}
-	
 	/** Parses function information into data */
-	private parseFunction(node: any, scope: any){
+	private parseFunction(node: any, scope: LuaScope){
 		if(node.isLocal){
 			return;
 		}
 	
 		// function asdf() end
 		if(node.identifier.type === "Identifier"){
-			if(this.isLocal(node.identifier.name, scope)){
+			if(scope.isLocal(node.identifier.name)){
 				return;
 			}
 
@@ -65,20 +49,20 @@ class LuaParser {
 			if(!tableName){
 				return; // This is too complex of an expression for me to handle (e.g. function GM.asdf:Test())
 			}
-			if(this.isLocal(tableName, scope)){
+			if(scope.isLocal(tableName)){
 				return;
 			}
 
 			let isMeta = false;
-			if(this.metaTables[tableName]){
+			if(scope.hasMetaTable(tableName)){
 				isMeta = true;
-				tableName = this.metaTables[tableName];
+				tableName = scope.translateMetaTable(tableName);
 			}
 
 			this.data.memberFunctions.push(new LuaMemberFunction(
 				isMeta,
 				tableName,
-				":",
+				node.identifier.indexer,
 				new LuaFunction(
 					node.identifier.identifier.name,
 					node.parameters.map((param: any) => param.name),
@@ -90,7 +74,7 @@ class LuaParser {
 	}
 	
 	/** Parses assignment information into data */
-	private parseAssignment(node: any, scope: any){
+	private parseAssignment(node: any, scope: LuaScope){
 		node.variables.forEach((variable: any, key: number) => {
 			if(!node.init[key]){
 				return;
@@ -103,14 +87,14 @@ class LuaParser {
 				if(!tableName){
 					return; // This is too complex of an expression for me to handle (e.g. self.test[asdf].test = 1)
 				}
-				if(this.isLocal(tableName, scope)){
+				if(scope.isLocal(tableName)){
 					return;
 				}
 
 				let isMeta = false;
-				if(this.metaTables[tableName]){
+				if(scope.hasMetaTable(tableName)){
 					isMeta = true;
-					tableName = this.metaTables[tableName];
+					tableName = scope.translateMetaTable(tableName);
 				}
 
 				// GM.Asdf = function(asdf) end
@@ -143,7 +127,7 @@ class LuaParser {
 			}
 			// Asdf = 1234
 			else if(variable.type === "Identifier"){
-				if(this.isLocal(variable.name, scope)){
+				if(scope.isLocal(variable.name)){
 					return;
 				}
 	
@@ -170,7 +154,7 @@ class LuaParser {
 	}
 	
 	/** Attempts to find a FindMetaTable definition in the current assignment, adds to data if hook found. Assumes node is an assignment. */
-	private parseMeta(node: any, scope: any){
+	private parseMeta(node: any, scope: LuaScope){
 		// Identify "local asdf = FindMetaTable("Player")" statements
 		node.variables.forEach((variable: any, key: number) => {
 			if(!node.init[key]){
@@ -186,13 +170,13 @@ class LuaParser {
 				init.arguments[0].type === "StringLiteral"){
 				let metaType = init.arguments[0].value;
 	
-				this.metaTables[variable.name] = metaType;
+				scope.addMetaTable(variable.name, metaType);
 			}
 		});
 	}
 	
 	/** Attempts to find a hook.Run/hook.Call in the current assignment, adds to data if hook found. Assumes node is an assignment or direct call. */
-	private parseHook(node: any, scope: any){
+	private parseHook(node: any, scope: LuaScope){
 		function parseExpression(parser: LuaParser, node: any, data: any){
 			if(node.type !== "CallExpression"){
 				return;
@@ -231,10 +215,9 @@ class LuaParser {
 	}
 	
 	/** Parses function parameters into the supplied scope. Assumes node is a FunctionDeclaration */
-	private parseFunctionParameters(node: any, scope: any){
+	private parseFunctionParameters(node: any, scope: LuaScope){
 		if(node.identifier.type === "MemberExpression" && node.identifier.indexer === ":"){
-			scope.parameters["self"] = true;
-			scope.locals["self"] = true;
+			scope.addSelf();
 		}
 	
 		node.parameters.forEach((parameter: any) => {
@@ -249,29 +232,29 @@ class LuaParser {
 				return;
 			}
 	
-			scope.parameters[name] = true;
-			scope.locals[name] = true; // Add as local aswell since it should be treated as locals
+			scope.addLocal(name);
+			scope.addParameter(name);
 		});
 	}
 	
 	/** Parses loop variables into the supplied scope. Assumes node is a for-loop */
-	private parseLoopParameters(node: any, scope: any){
+	private parseLoopParameters(node: any, scope: LuaScope){
 		if(node.type === "ForGenericStatement"){
 			node.variables.forEach((variable: any) => {
 				if(variable.type === "Identifier"){ // not sure if it can be anything else but always good to check
-					scope.locals[variable.name] = true;
+					scope.addLocal(variable.name);
 				}
 			});
 		}
 		else if(node.type === "ForNumericStatement"){
 			if(node.variable.type === "Identifier"){
-				scope.locals[node.variable.name] = true;
+				scope.addLocal(node.variable.name);
 			}
 		}
 	}
 	
 	/** Parses local assignment into the supplied scope. Assumes node is a LocalStatement. */
-	private parseLocal(node: any, scope: any){
+	private parseLocal(node: any, scope: LuaScope){
 		node.variables.forEach((variable: any) => {
 			if(variable.type === "Identifier"){
 				if(this.data.variables.some(v => v.name === variable.name)){
@@ -281,25 +264,26 @@ class LuaParser {
 					return;
 				}
 	
-				scope.locals[variable.name] = true;
+				scope.addLocal(variable.name);
 			}
 		});
 	}
 
-	private parseBody(node: any, scope: any){
-		// Parse function parameters into the scope
-		if(node.type === "FunctionDeclaration"){
-			this.parseFunctionParameters(node, scope);
-		}
-	
-		if(node.type === "ForGenericStatement" || node.type === "ForNumericStatement"){
-			this.parseLoopParameters(node, scope);
-		}
-	
+	private parseBody(node: any, scope: LuaScope){	
 		// If this body has inner bodies, traverse them
 		if(node.body){
-			let localScope = LuaParser.deepCopy(scope); // Create a new child scope inside this body
+			let localScope = new LuaScope(node.loc.start.line, node.loc.end.line, scope);
+
+			// Parse function parameters into the new scope
+			if(node.type === "FunctionDeclaration"){
+				this.parseFunctionParameters(node, localScope);
+			}
+		
+			if(node.type === "ForGenericStatement" || node.type === "ForNumericStatement"){
+				this.parseLoopParameters(node, localScope);
+			}
 	
+			// Recursively parse inner bodies
 			node.body.forEach((bodyItem: any) => {
 				this.parseBody(bodyItem, localScope);
 			});
@@ -309,7 +293,7 @@ class LuaParser {
 		if(node.type === "IfStatement"){
 			node.clauses.forEach((clause: any) => {
 				if(clause.body){
-					let localScope = LuaParser.deepCopy(scope); // Create a new child scope inside this clause
+					let localScope = new LuaScope(node.loc.start.line, node.loc.end.line, scope);
 	
 					clause.body.forEach((bodyItem: any) => {
 						this.parseBody(bodyItem, localScope);
@@ -348,12 +332,12 @@ class LuaParser {
 			return false;
 		}
 
-		let scope = {
-			locals: {}, // local variables
-			parameters: {}, // local function parameters
-		};
+		let topScope = new LuaScope(ast.loc.start.line, ast.loc.end.line);
+		this.topScope = topScope;
 
-		this.parseBody(ast, scope);
+		ast.body.forEach((bodyItem: any) => {
+			this.parseBody(bodyItem, topScope);
+		});
 	}
 
 	constructor(fileId: string){
