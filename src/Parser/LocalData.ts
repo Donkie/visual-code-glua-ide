@@ -69,6 +69,9 @@ class LuaScope{
 	}
 
 	/**
+	 * 
+	 * @param scopeStart Line number of start of scope
+	 * @param scopeEnd Line number of end of scope
 	 * @param parentScope Scope to deep-copy from
 	 */
 	constructor(scopeStart: number, scopeEnd: number, parentScope?: LuaScope){

@@ -2,6 +2,60 @@ import * as luaparse from 'luaparse';
 import {LuaScope} from './LocalData';
 import {GlobalData, LuaPrimitive, LuaVariable, LuaFunction, LuaMemberFunction, LuaMemberVariable, LuaHook} from './GlobalData';
 
+enum NodeType {
+	AssignmentStatement,
+	BinaryExpression,
+	BooleanLiteral,
+	BreakStatement,
+	CallExpression,
+	CallStatement,
+	Chunk,
+	Comment,
+	ContinueStatement,
+	DoStatement,
+	ElseClause,
+	ElseifClause,
+	ForGenericStatement,
+	ForNumericStatement,
+	FunctionDeclaration,
+	GotoStatement,
+	Identifier,
+	IfClause,
+	IfStatement,
+	IndexExpression,
+	LabelStatement,
+	LocalStatement,
+	LogicalExpression,
+	MemberExpression,
+	NilLiteral,
+	NumericLiteral,
+	RepeatStatement,
+	ReturnStatement,
+	StringCallExpression,
+	StringLiteral,
+	TableCallExpression,
+	TableConstructorExpression,
+	TableKey,
+	TableKeyString,
+	TableValue,
+	UnaryExpression,
+	VarargLiteral,
+	WhileStatement
+}
+
+function parseType(type: string): NodeType{
+	return (<any> NodeType)[type]; // wtf typescript
+}
+
+function is(node: any, type: NodeType){
+	return parseType(node.type) === type;
+}
+
+function isAny(node: any, ...args: NodeType[]){
+	let nodeType = parseType(node.type);
+	return args.includes(nodeType);
+}
+
 class LuaParser {
 	readonly data: GlobalData = new GlobalData();
 
@@ -10,14 +64,14 @@ class LuaParser {
 	private fileId: string;
 
 	private static valueTypeFromType(type: string): LuaPrimitive{
-		switch(type){
-			case "StringLiteral":
+		switch(parseType(type)){
+			case NodeType.StringLiteral:
 				return LuaPrimitive.string;
-			case "NumericLiteral":
+			case NodeType.NumericLiteral:
 				return LuaPrimitive.number;
-			case "BooleanLiteral":
+			case NodeType.BooleanLiteral:
 				return LuaPrimitive.boolean;
-			case "TableConstructorExpression":
+			case NodeType.TableConstructorExpression:
 				return LuaPrimitive.table;
 			default:
 				return LuaPrimitive.any;
@@ -31,7 +85,7 @@ class LuaParser {
 		}
 	
 		// function asdf() end
-		if(node.identifier.type === "Identifier"){
+		if(is(node.identifier, NodeType.Identifier)){
 			if(scope.isLocal(node.identifier.name)){
 				return;
 			}
@@ -44,7 +98,7 @@ class LuaParser {
 			));
 		}
 		// function GM:Asdf() end
-		else if(node.identifier.type === "MemberExpression"){
+		else if(is(node.identifier, NodeType.MemberExpression)){
 			let tableName = node.identifier.base.name;
 			if(!tableName){
 				return; // This is too complex of an expression for me to handle (e.g. function GM.asdf:Test())
@@ -82,7 +136,7 @@ class LuaParser {
 			let init = node.init[key];
 	
 			// GM.Asdf, GM.Bsdf = 1234, function(asdf) end
-			if(variable.type === "MemberExpression"){
+			if(is(variable, NodeType.MemberExpression)){
 				let tableName = variable.base.name;
 				if(!tableName){
 					return; // This is too complex of an expression for me to handle (e.g. self.test[asdf].test = 1)
@@ -98,7 +152,7 @@ class LuaParser {
 				}
 
 				// GM.Asdf = function(asdf) end
-				if(init.type === "FunctionDeclaration"){
+				if(is(init, NodeType.FunctionDeclaration)){
 					this.data.memberFunctions.push(new LuaMemberFunction(
 						isMeta,
 						tableName,
@@ -126,13 +180,13 @@ class LuaParser {
 				}
 			}
 			// Asdf = 1234
-			else if(variable.type === "Identifier"){
+			else if(is(variable, NodeType.Identifier)){
 				if(scope.isLocal(variable.name)){
 					return;
 				}
 	
 				// Asdf = function(asdf) end
-				if(init.type === "FunctionDeclaration"){
+				if(is(init, NodeType.FunctionDeclaration)){
 					this.data.functions.push(new LuaFunction(
 						variable.name,
 						init.parameters.map((param: any) => param.name),
@@ -162,12 +216,12 @@ class LuaParser {
 			}
 			let init = node.init[key];
 	
-			if(variable.type === "Identifier" &&
-				init.type === "CallExpression" &&
+			if(is(variable, NodeType.Identifier) &&
+				is(init, NodeType.CallExpression) &&
 				init.base.name &&
 				init.base.name === "FindMetaTable" &&
 				init.arguments.length === 1 &&
-				init.arguments[0].type === "StringLiteral"){
+				is(init.arguments[0], NodeType.StringLiteral)){
 				let metaType = init.arguments[0].value;
 	
 				scope.addMetaTable(variable.name, metaType);
@@ -178,15 +232,15 @@ class LuaParser {
 	/** Attempts to find a hook.Run/hook.Call in the current assignment, adds to data if hook found. Assumes node is an assignment or direct call. */
 	private parseHook(node: any, scope: LuaScope){
 		function parseExpression(parser: LuaParser, node: any, data: any){
-			if(node.type !== "CallExpression"){
+			if(!is(node, NodeType.CallExpression)){
 				return;
 			}
 	
-			if(node.base.type === "MemberExpression" &&
+			if(is(node.base, NodeType.MemberExpression) &&
 				node.arguments.length >= 1 &&
-				node.base.base.type === "Identifier" &&
+				is(node.base.base, NodeType.Identifier) &&
 				node.base.base.name === "hook" &&
-				node.base.identifier.type === "Identifier" &&
+				is(node.base.identifier, NodeType.Identifier) &&
 				(node.base.identifier.name === "Run" ||
 					node.base.identifier.name === "Call")){
 				let isHookRun = node.base.identifier.name === "Run";
@@ -203,11 +257,11 @@ class LuaParser {
 		}
 	
 		//hook.Run("")
-		if(node.type === "CallStatement"){
+		if(is(node, NodeType.CallStatement)){
 			parseExpression(this, node.expression, this.data);
 		}
 		//local a = hook.Run("")
-		else if(node.type === "LocalStatement" || node.type === "AssignmentStatement"){
+		else if(isAny(node, NodeType.LocalStatement, NodeType.AssignmentStatement)){
 			node.init.forEach((init: any) => {
 				parseExpression(this, init, this.data);
 			});
@@ -216,16 +270,16 @@ class LuaParser {
 	
 	/** Parses function parameters into the supplied scope. Assumes node is a FunctionDeclaration */
 	private parseFunctionParameters(node: any, scope: LuaScope){
-		if(node.identifier.type === "MemberExpression" && node.identifier.indexer === ":"){
+		if(is(node.identifier, NodeType.MemberExpression) && node.identifier.indexer === ":"){
 			scope.addSelf();
 		}
 	
 		node.parameters.forEach((parameter: any) => {
 			let name;
-			if(parameter.type === "Identifier"){
+			if(is(parameter, NodeType.Identifier)){
 				name = parameter.name;
 			}
-			else if(parameter.type === "VarargLiteral"){
+			else if(is(parameter, NodeType.VarargLiteral)){
 				name = "...";
 			}
 			else{
@@ -239,24 +293,22 @@ class LuaParser {
 	
 	/** Parses loop variables into the supplied scope. Assumes node is a for-loop */
 	private parseLoopParameters(node: any, scope: LuaScope){
-		if(node.type === "ForGenericStatement"){
+		if(is(node, NodeType.ForGenericStatement)){
 			node.variables.forEach((variable: any) => {
-				if(variable.type === "Identifier"){ // not sure if it can be anything else but always good to check
+				if(is(variable, NodeType.Identifier)){ // not sure if it can be anything else but always good to check
 					scope.addLocal(variable.name);
 				}
 			});
 		}
-		else if(node.type === "ForNumericStatement"){
-			if(node.variable.type === "Identifier"){
-				scope.addLocal(node.variable.name);
-			}
+		else if(is(node, NodeType.ForNumericStatement) && is(node.variable, NodeType.Identifier)){
+			scope.addLocal(node.variable.name);
 		}
 	}
 	
 	/** Parses local assignment into the supplied scope. Assumes node is a LocalStatement. */
 	private parseLocal(node: any, scope: LuaScope){
 		node.variables.forEach((variable: any) => {
-			if(variable.type === "Identifier"){
+			if(is(variable, NodeType.Identifier)){
 				if(this.data.variables.some(v => v.name === variable.name)){
 					// This is already a global variable
 					// This might bite me in the ass, but CTP for example does "ctp = ctp or {}; local ctp = ctp" which means we think ctp is now
@@ -275,11 +327,11 @@ class LuaParser {
 			let localScope = new LuaScope(node.loc.start.line, node.loc.end.line, scope);
 
 			// Parse function parameters into the new scope
-			if(node.type === "FunctionDeclaration"){
+			if(is(node, NodeType.FunctionDeclaration)){
 				this.parseFunctionParameters(node, localScope);
 			}
 		
-			if(node.type === "ForGenericStatement" || node.type === "ForNumericStatement"){
+			if(isAny(node, NodeType.ForGenericStatement, NodeType.ForNumericStatement)){
 				this.parseLoopParameters(node, localScope);
 			}
 	
@@ -290,7 +342,7 @@ class LuaParser {
 		}
 	
 		// If this is an if statement, traverse all parts of it
-		if(node.type === "IfStatement"){
+		if(is(node, NodeType.IfStatement)){
 			node.clauses.forEach((clause: any) => {
 				if(clause.body){
 					let localScope = new LuaScope(node.loc.start.line, node.loc.end.line, scope);
@@ -302,23 +354,23 @@ class LuaParser {
 			});
 		}
 	
-		if(node.type === "LocalStatement"){
+		if(is(node, NodeType.LocalStatement)){
 			this.parseLocal(node, scope);
 		}
 	
-		if(node.type === "LocalStatement" || node.type === "AssignmentStatement" || node.type === "CallStatement"){
+		if(isAny(node, NodeType.LocalStatement, NodeType.AssignmentStatement, NodeType.CallStatement)){
 			this.parseHook(node, scope);
 		}
 		
-		if(node.type === "LocalStatement" || node.type === "AssignmentStatement"){
+		if(isAny(node, NodeType.LocalStatement, NodeType.AssignmentStatement)){
 			this.parseMeta(node, scope);
 		}
 	
-		if(node.type === "AssignmentStatement"){
+		if(is(node, NodeType.AssignmentStatement)){
 			this.parseAssignment(node, scope);
 		}
 		
-		if(node.type === "FunctionDeclaration"){
+		if(is(node, NodeType.FunctionDeclaration)){
 			this.parseFunction(node, scope);
 		}
 	}
@@ -328,7 +380,7 @@ class LuaParser {
 			locations: true
 		});
 
-		if(ast.type !== "Chunk") {
+		if(!is(ast, NodeType.Chunk)) {
 			return false;
 		}
 
