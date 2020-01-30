@@ -43,39 +43,46 @@ enum NodeType {
 	WhileStatement
 }
 
+/** Converts a string node type to NodeType enum */
 function parseType(type: string): NodeType{
 	return (<any> NodeType)[type]; // wtf typescript
 }
 
+/** Check if the node is of a specific type */
 function is(node: any, type: NodeType){
 	return parseType(node.type) === type;
 }
 
+/** Check if the node is of any of the listed types */
 function isAny(node: any, ...args: NodeType[]){
 	let nodeType = parseType(node.type);
 	return args.includes(nodeType);
 }
 
-class LuaParser {
-	readonly data: GlobalData = new GlobalData();
+/** Converts a node type to a lua primitive type */
+function valueTypeFromType(type: NodeType): LuaPrimitive{
+	switch(type){
+		case NodeType.StringLiteral:
+			return LuaPrimitive.string;
+		case NodeType.NumericLiteral:
+			return LuaPrimitive.number;
+		case NodeType.BooleanLiteral:
+			return LuaPrimitive.boolean;
+		case NodeType.TableConstructorExpression:
+			return LuaPrimitive.table;
+		default:
+			return LuaPrimitive.any;
+	}
+}
 
-	topScope?: LuaScope;
+class LuaParser {
+	public readonly data: GlobalData = new GlobalData();
+	public topScope?: LuaScope;
 
 	private fileId: string;
 
-	private static valueTypeFromType(type: string): LuaPrimitive{
-		switch(parseType(type)){
-			case NodeType.StringLiteral:
-				return LuaPrimitive.string;
-			case NodeType.NumericLiteral:
-				return LuaPrimitive.number;
-			case NodeType.BooleanLiteral:
-				return LuaPrimitive.boolean;
-			case NodeType.TableConstructorExpression:
-				return LuaPrimitive.table;
-			default:
-				return LuaPrimitive.any;
-		}
+	public setFileId(fileId: string){
+		this.fileId = fileId;
 	}
 	
 	/** Parses function information into data */
@@ -171,7 +178,7 @@ class LuaParser {
 						isMeta,
 						tableName,
 						new LuaVariable(
-							LuaParser.valueTypeFromType(init.type),
+							valueTypeFromType(parseType(init.type)),
 							variable.identifier.name,
 							variable.loc.start.line,
 							this.fileId
@@ -197,7 +204,7 @@ class LuaParser {
 				// Asdf = 1234
 				else{
 					this.data.variables.push(new LuaVariable(
-						LuaParser.valueTypeFromType(init.type),
+						valueTypeFromType(parseType(init.type)),
 						variable.name,
 						variable.loc.start.line,
 						this.fileId
@@ -392,8 +399,8 @@ class LuaParser {
 		});
 	}
 
-	constructor(fileId: string){
-		this.fileId = fileId;
+	constructor(fileId?: string){
+		this.fileId = fileId ? fileId : "N/A";
 	}
 }
 

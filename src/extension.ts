@@ -3,61 +3,77 @@ import * as vscode from 'vscode';
 import { LuaPrimitive } from './Parser/GlobalData';
 import { LuaParser } from "./Parser/LuaParser";
 
+function getFileId(path: string){
+	const regex = /steamapps\/common\/garrysmod\/garrysmod\/(.+)$/i;
+	let groups = regex.exec(path);
+	if(groups === null){ // not a gmod path, do more advanced logic here later
+		return path;
+	}
+
+	return groups[1];
+}
+
+async function readAndParse(parser: LuaParser, file: vscode.Uri){
+	let fileId = getFileId(file.path);
+
+	console.log("Parsing " + fileId);
+	
+	let doc = await vscode.workspace.openTextDocument(file);
+	parser.setFileId(fileId);
+	parser.parseLua(doc.getText());
+}
+
+async function parseFiles(parser: LuaParser, files: vscode.Uri[]){
+	for(let i = 0; i < files.length; i++){
+		await readAndParse(parser, files[i]);
+	}
+}
 
 export function activate(context: vscode.ExtensionContext) {
 	console.log("visual-code-glua-ide is now active!");
 
-	vscode.workspace.findFiles('**/*.lua').then(
+	//vscode.workspace.findFiles('**/*.lua').then(
+	vscode.workspace.findFiles('gamemode/*.lua').then(
 		files => {
-			let file = files[31];
-			console.log("Parsing " + file.path);
+			let parser = new LuaParser();
 
-			//files.forEach(file => {
-				vscode.workspace.openTextDocument(file).then(
-					doc => {
-
-						let parser = new LuaParser(file.path);
-						parser.parseLua(doc.getText());
-
-						let data = parser.data;
-
-						console.log("File scope tree: ", parser.topScope);
-
-						console.log("Hooks:");
-						data.hooks.forEach(hook => {
-							let params = hook.parameters.join(', ');
-							console.log(`line ${hook.line}: ${hook.name}(${params})`);
-						});
-						
-						console.log("Global Variables:");
-						data.variables.forEach(variable => {
-							console.log(`line ${variable.line}: ${variable.name} (type '${LuaPrimitive[variable.type]}')`);
-						});
-
-						console.log("Global Functions:");
-						data.functions.forEach(func => {
-							let params = func.parameters.join(', ');
-							console.log(`line ${func.line}: ${func.name}(${params})`);
-						});
-
-						console.log("Member Functions:");
-						data.memberFunctions.forEach(memb => {
-							let tbl = memb.table;
-							let params = memb.f.parameters.join(', ');
-							console.log(`line ${memb.f.line}: ${tbl}${memb.indexer}${memb.f.name}(${params})`);
-						});
-
-						console.log("Member Variables:");
-						data.memberVariables.forEach(memb => {
-							let tbl = memb.table;
-							console.log(`line ${memb.v.line}: ${tbl}.${memb.v.name} (type '${LuaPrimitive[memb.v.type]}')`);
-						});
-						
-						//console.log(ast);
-						//console.log(data);
-					}
-				);
-			//});
+			parseFiles(parser, files).then(
+				() => {
+					let data = parser.data;
+		
+					console.log("File scope tree: ", parser.topScope);
+		
+					console.log("Hooks:");
+					data.hooks.forEach(hook => {
+						let params = hook.parameters.join(', ');
+						console.log(`line ${hook.line}: ${hook.name}(${params})`);
+					});
+					
+					console.log("Global Variables:");
+					data.variables.forEach(variable => {
+						console.log(`line ${variable.line}: ${variable.name} (type '${LuaPrimitive[variable.type]}')`);
+					});
+		
+					console.log("Global Functions:");
+					data.functions.forEach(func => {
+						let params = func.parameters.join(', ');
+						console.log(`line ${func.line}: ${func.name}(${params})`);
+					});
+		
+					console.log("Member Functions:");
+					data.memberFunctions.forEach(memb => {
+						let tbl = memb.table;
+						let params = memb.f.parameters.join(', ');
+						console.log(`line ${memb.f.line}: ${tbl}${memb.indexer}${memb.f.name}(${params})`);
+					});
+		
+					console.log("Member Variables:");
+					data.memberVariables.forEach(memb => {
+						let tbl = memb.table;
+						console.log(`line ${memb.v.line}: ${tbl}.${memb.v.name} (type '${LuaPrimitive[memb.v.type]}')`);
+					});
+				}
+			);
 		}
 	);
 
