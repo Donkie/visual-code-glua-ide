@@ -23,6 +23,18 @@
 				"command": "extension.currentTime",
 				"title": "Display Current Time"
 			}
+		],
+		"languages": [
+			{
+				"id": "glua",
+				"extensions": [
+					".lua"
+				],
+				"aliases": [
+					"Garry's Mod Lua"
+				],
+				"configuration": "./language-configuration.json"
+			}
 		]
 	},
 	"scripts": {
@@ -40,7 +52,12 @@
 		"@types/mocha": "^2.2.42"
 	},
 	"dependencies": {
+		"@types/he": "^1.1.0",
 		"@types/luaparse": "0.0.29",
-		"luaparse": "git://github.com/Donkie/luaparse.git#glua"
+		"@types/request-promise": "^4.1.45",
+		"he": "^1.2.0",
+		"luaparse": "git://github.com/Donkie/luaparse.git#glua",
+		"request": "^2.88.0",
+		"request-promise": "^4.2.5"
 	}
 }

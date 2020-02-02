@@ -2,6 +2,8 @@
 import * as vscode from 'vscode';
 import { LuaPrimitive } from './Parser/GlobalData';
 import { LuaParser } from "./Parser/LuaParser";
+import * as rp from "request-promise";
+import * as he from "he";
 
 function getFileId(path: string){
 	const regex = /steamapps\/common\/garrysmod\/garrysmod\/(.+)$/i;
@@ -86,6 +88,46 @@ export function activate(context: vscode.ExtensionContext) {
 	*/
 
 }
+
+function matchOnce(str: string, regex: RegExp){
+	let m;
+	if ((m = regex.exec(str)) !== null) {
+		
+		// The result can be accessed through the `m`-variable.
+		m.forEach((match, groupIndex) => {
+			console.log(`Found match, group ${groupIndex}: ${match}`);
+		});
+	}
+}
+
+vscode.languages.registerHoverProvider("glua", {
+	provideHover(document, position, token) {
+		console.log(document.uri.toString());
+		console.log(position);
+		console.log(token);
+		const range = document.getWordRangeAtPosition(position, /\w[\w\.\:]*/);
+		const word = document.getText(range);
+
+		const regex = /<function[\W\w]+(?:<description>([\w\W]+?)<\/description>)[\W\w]+(?:<realm>(.+)<\/realm>)[\W\w]+\/function>/;
+		
+		return rp.get(`https://wiki.facepunch.com/gmod/${word}?format=json`)
+			.then(json => {
+				const data = JSON.parse(json);
+				const markup = he.decode(data.markup);
+				const m = regex.exec(markup);
+				if(m === null){
+					console.log(data);
+					return null;
+				}
+				console.log(m![1]);
+
+				return new vscode.Hover(
+					m![1],
+					range
+				);
+			});
+	}
+});
 
 // this method is called when your extension is deactivated
 export function deactivate() {}
