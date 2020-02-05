@@ -1,0 +1,37 @@
+{"title":"weapons.GetList","wikiName":"Garry's Mod Wiki","wikiIcon":"https://files.facepunch.com/garry/822e60dc-c931-43e4-800f-cbe010b3d4cc.png","wikiUrl":"gmod","address":"weapons.GetList","createdTime":"2020-01-21T17:09:50.2+00:00","updateCount":0,"markup":"<function name="GetList" parent="weapons" type="libraryfunc">
+	<description>Get a list of all the registered SWEPs. This does not include weapons added to spawnmenu manually.</description>
+	<realm>Shared</realm>
+	<rets>
+		<ret name="" type="table">List of all the registered SWEPs</ret>
+	</rets>
+</function>
+
+<example>
+	<description>Example structure.</description>
+	<code>PrintTable( weapons.GetList() )</code>
+	<output>
+
+```
+1:
+	Folder = weapons/weapon_myweapon
+	ClassName = weapon_myweapon
+	-- The rest of the SWEP table
+2:
+	Folder = weapons/weapon_myweapon2
+	ClassName = weapon_myweapon2
+	-- The rest of the SWEP table
+```
+
+	</output>
+
+</example>","html":"<div class="function libraryfunc realm-client realm-server">
+<div class="function_line"><a class="link-page exists" href="/gmod/table">table</a> weapons.<strong>GetList</strong>()</div><h1>Description</h1><div class="function_description"><p>Get a list of all the registered SWEPs. This does not include weapons added to spawnmenu manually.</p>
+</div><h1>Returns</h1><div class="function_returns"><div><span class="numbertag">1</span> <a class="link-page exists" href="/gmod/table">table</a> <div class="numbertagindent">List of all the registered SWEPs</div></div></div></div><h2>Example</h2><div class="example"><div class="description"><p>Example structure.</p>
+</div><div class="code"><span class="method">PrintTable</span>( <span class="className">weapons</span>.<span class="method">GetList</span>() )</div><div class="output"><b>Output:</b> <div data-generationtime="0" class="code code-lua">1:
+	Folder <span class="operator">=</span> weapons/weapon_myweapon
+	ClassName <span class="operator">=</span> weapon_myweapon
+	<span class="comment">-- The rest of the SWEP table</span>
+2:
+	Folder <span class="operator">=</span> weapons/weapon_myweapon2
+	ClassName <span class="operator">=</span> weapon_myweapon2
+	<span class="comment">-- The rest of the SWEP table</span></div></div></div>","revisionId":512212,"pageLinks":[{"url":"/gmod/weapons.GetList","label":"View Page","icon":"file","description":""},{"url":"/gmod/weapons.GetList~edit","label":"Edit Page","icon":"pencil","description":""},{"url":"/gmod/weapons.GetList~history","label":"View History","icon":"history","description":""}]}
